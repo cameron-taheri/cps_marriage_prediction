@@ -1,0 +1,530 @@
+---
+title: "Homework 3"
+author: "Cameron Taheri"
+date: "2026-01-30"
+output: pdf_document
+---
+
+```{r setup, message=FALSE, echo=FALSE}
+# setup / load base packages
+library(tidyverse)
+library(haven) # for reading Stata (, SAS, and SPSS) files
+library(equatiomatic)
+my_path <- "~/r_code/adv_data/data"
+```
+
+### CPS Data Exploration
+```{r message=FALSE, include=FALSE, echo=FALSE}
+# load CPS data
+cps09mar_stata <- read_dta(
+  file = file.path(my_path, "cps09mar.dta")
+  )
+
+# show a few lines
+head(cps09mar_stata, 10)
+```
+
+```{r message=FALSE, include=FALSE, echo=FALSE}
+# display summary
+str(cps09mar_stata)
+```
+
+```{r message=FALSE, include=FALSE, echo=FALSE}
+# show summary statistics
+summary(cps09mar_stata)
+```
+Variables include age, female, hisp, education, earnings, hours, week, union, uncov, region, race, and marital. This aligns with the data description file, as does the number of rows (50,742).
+
+```{r}
+# create copy of data frame
+cps <- cps09mar_stata
+```
+
+```{r message=FALSE, include=FALSE, echo=FALSE}
+# create log wage variable
+cps$wage <- cps$earnings / (cps$hours * cps$week)
+cps$lwage <- log(cps$wage)
+```
+
+\ 
+
+#### Density of Log Wage
+The below depicts the density of logged wages. Wages are calculated as $wage = earnings\ /\ weeks$, where $earnings$ is measured as "total annual wage and salary earnings" and $weeks$ is "number of weeks worked per year." 
+
+```{r message=FALSE, echo=FALSE, include=FALSE}
+# calculate mean and median of log wage to include in the density graphs
+mean_lwage <- mean(cps$lwage, na.rm = TRUE) # get rid of na values before computing the mean
+med_lwage <- median(cps$lwage, na.rm = TRUE)
+
+mean_wage <- mean(cps$wage, na.rm = TRUE) # get rid of na values before computing the mean
+med_wage <- median(cps$wage, na.rm = TRUE)
+```
+
+```{r message = FALSE, echo = FALSE}
+# Density plots with bandwidths b = 0.01, 2.0
+ggplot(data = cps, mapping = aes(x = lwage)) +
+  
+  geom_density(bw = 0.01, fill = "forestgreen", alpha = 0.5) +
+  geom_density(bw = 2.0, fill = "skyblue", alpha = 0.5) +
+  
+  # add mean and median to the plot
+  geom_vline(aes(xintercept = mean_lwage), col = "red") +
+  geom_vline(aes(xintercept = med_lwage), col = "blue") +
+  
+  # labeling
+  annotate("text", x = mean_lwage + 1.2, y = -0.15, label = paste("Mean:", round(mean_lwage, 2)), color = "red") +
+  annotate("text", x = med_lwage + 1.3, y = -0.05, label = paste("Median:", round(med_lwage, 2)), color = "blue") +
+  labs(
+    title = "Log Wage Density",
+    x = "Log Wage",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+We can see that changing the bandwidth of the density plots smooths the graph. Under-specification of the bandwidth (0.01, green) leads to a "spiked" graph with too much detail. The density of this graph reaches above 1.0, while over-specification of bandwidth (2.0,) results in overstating the density of logged wages, particularly to the right of the mean. 
+
+Both of these density graphs show wages as exhibiting some sense of log-normality. Relative to raw wages, depicted below, logged wages is smoother and in the shape of the normal distribution's PDF.
+
+```{r message=FALSE, echo=FALSE}
+ggplot(data = cps, mapping = aes(x = wage)) +
+  geom_density(bw = 1.0, fill = "skyblue", alpha = 0.5) +
+  
+  # add mean and median to the plot
+  geom_vline(aes(xintercept = mean_wage), col = "red") +
+  geom_vline(aes(xintercept = med_wage), col = "blue") +
+  
+  # labeling
+  annotate("text", x = mean_wage + 35.0, y = -0.0025, label = paste("Mean:", round(mean_wage, 2)), color = "red") +
+  annotate("text", x = med_wage + 44.5, y = -0.005, label = paste("Μedian:", round(med_wage, 2)), color = "blue") +
+  labs(
+    title = "Wage Density (bandwidth = 1.0)",
+    x = "Wage",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+That said, the range of log and raw wages is rather drastic, with some individuals earning fractions of pennies it seems relative to others earning above \$100.00 per hour. A summary of the newly created $wage$ variable below shows this disparity.
+
+```{r}
+summary(cps$wage)
+```
+
+If we were to truncate the data and enforce a rule of $1 < wage < 100$, then we would have the below instead. I will note that this rule is arbitrary and not based on a formal analysis of the data, only used for visual purposes.
+
+```{r message=FALSE, echo=FALSE}
+cps_wage_truncated <- cps |>
+  filter( 
+    wage > 1,
+    wage < 100
+    )
+
+mean_lwage_trunc <- mean(cps_wage_truncated$lwage)
+med_lwage_trunc <- median(cps_wage_truncated$lwage)
+mean_wage_trunc <- mean(cps_wage_truncated$wage)
+med_wage_trunc <- median(cps_wage_truncated$wage)
+
+print("Summary of Truncated Logged Wages")
+summary(cps_wage_truncated$lwage)
+
+print("Summary of Truncated Raw Wages")
+summary(cps_wage_truncated$wage)
+```
+
+```{r message=FALSE, echo=FALSE}
+# Density plots with bandwidths b = 0.01, 2.0
+ggplot(data = cps_wage_truncated, mapping = aes(x = lwage)) +
+  
+  geom_density(bw = 0.01, fill = "forestgreen", alpha = 0.5) +
+  geom_density(bw = 2.0, fill = "skyblue", alpha = 0.5) +
+  
+  # add mean and median to the plot
+  geom_vline(aes(xintercept = mean_lwage_trunc), col = "red") +
+  geom_vline(aes(xintercept = med_lwage_trunc), col = "blue") +
+  
+  # labeling
+  annotate("text", x = mean_lwage_trunc + 1.0, y = -0.15, label = paste("Mean:", round(mean_lwage_trunc, 2)), color = "red") +
+  annotate("text", x = med_lwage_trunc + 1.1, y = -0.05, label = paste("Median:", round(med_lwage_trunc, 2)), color = "blue") +
+  labs(
+    title = "Log Wage Density - Truncated Wage Data",
+    x = "Log Wage",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+The smoothening effect of a larger bandwidth is even more pronounced in the above graph of truncated wages. Below is the corresponding raw wage density, inclusive of the truncation performed earlier.
+
+```{r message=FALSE, echo=FALSE}
+ggplot(data = cps_wage_truncated, mapping = aes(x = wage)) +
+  geom_density(bw = 1.0, fill = "skyblue", alpha = 0.5) +
+  
+  # add mean and median to the plot
+  geom_vline(aes(xintercept = mean_wage_trunc), col = "red") +
+  geom_vline(aes(xintercept = med_wage_trunc), col = "blue") +
+  
+  # labeling
+  annotate("text", x = mean_wage_trunc + 30.0, y = -0.0025, label = paste("Mean:", round(mean_wage_trunc, 2)), color = "red") +
+  annotate("text", x = med_wage_trunc + 38.7, y = -0.005, label = paste("Μedian:", round(med_wage_trunc, 2)), color = "blue") +
+  labs(
+    title = "Wage Density - Truncated (bandwidth = 1.0)",
+    x = "Wage",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+\ 
+
+#### Empirical Distribution of Log Wages
+Analyzing log wages by age group for individuals aged 25, 30, and 35, there is a clear trend that 35-year-olds make more across all percentile groups relative to 30- and 25-year-olds. This also holds for 30-year-olds relative to 25-year-olds. This is a reasonable finding as we might often assume a positive, linear relationship between age and earnings: the older you get, the more likely you receive promotions, the more income you generate.
+
+```{r message=FALSE, echo=FALSE}
+# generate a subset of only individuals ages 25, 30, and 35
+cps_age_subset <- cps |>
+  filter(age %in% c(25, 30, 35))
+
+# plot them all using stat_ecdf() function
+ggplot(
+  data = cps_age_subset, 
+  mapping = aes(
+    x = lwage, 
+    col = as.factor(age)
+    )
+  ) +
+  stat_ecdf(geom = "step") +
+  scale_color_manual(
+    name = "Age",
+    values = c(
+      "25" = "darkblue",
+      "30" = "darkgreen",
+      "35" = "darkorange"
+    )
+  ) +
+  labs(
+    title = "Empirical Distribution of Log Wages by Age",
+    x = "Log Wage",
+    y = "Empirical CDF"
+  )
+  
+```
+
+\ 
+
+### Linear Probability Modeling: Marriage
+
+```{r message=FALSE, echo=FALSE, include = FALSE}
+# create subset of only men with a college degree
+cps_collegemen_subset <- cps |>
+  filter(
+    female == 0,
+    education == 16
+    )
+
+# new variable for married (incl. widowed) or not (separated, divorced, single, )
+cps_collegemen_subset$married <- ifelse(cps_collegemen_subset$marital <= 3, 1, 0)
+
+n_obs <- nrow(cps_collegemen_subset)
+summary(cps_collegemen_subset)
+```
+
+A subset of the CPS data is created, including only males with college degrees. The number of observations is **`r scales::comma(n_obs)`**.
+
+\ 
+
+#### Probability of Male College Graduate Being Married
+
+```{r message=FALSE, echo=FALSE, include=FALSE}
+# linear probability model for probability that an individual is married (married + widowed = ever married, excl. div/sep)
+res.lpm.base <- glm(married ~ 1,
+                  data = cps_collegemen_subset,
+                  family = gaussian(link="identity"))
+
+names(res.lpm.base)  # shows all of the stored values in the glm function
+summary(res.lpm.base) # shows the summary of the estimation function
+```
+
+Looking at the sample of men with college degrees in March 2009, we can estimate the probability of being married or not, where married is actively in a marriage or widowed while not married is separated, divorced, and single/never married. To do this, we'll run a linear probability model taking the following form:
+
+\ 
+
+**LPM 1:** $E[Y_i | X_i] = P[Y_i = 1 | X_i] = \beta_0$, 
+
+\ 
+
+where $P[Y_i = 1 | X_i]$ is the probability that married takes on a value of 1 (if currently married or widowed). The intercept term ($\beta_0$) gives us the conditional probability, with the LPM regressing binary outcome variable married on a constant 1. The general linear model function `glm()` is used with distribution family specified as `gaussian`.
+
+**Results:** The estimated probability of being married is **~75.68%**, significant at the 1% confidence level (p-value < 0.001).
+
+\ 
+
+#### Predicting Marriage Based on Age
+For predicting if a male college graduate would be married in March 2009 depending on their age, an LPM of married on age will first be run. Intervals for age are then created and used after estimating the model to predict the conditional probability of each age interval being married or not.
+
+```{r echo=FALSE, include=FALSE}
+# estimate the LPM of married (0,1) using age as a predictor
+res.lpm.age <- glm(married ~ age,
+               data = cps_collegemen_subset,
+               family = gaussian(link = "identity"))
+```
+
+\ 
+
+**LPM 2:** $E(married) = \beta_0 + \beta_1(Age)$ 
+
+\ 
+
+**Results:**
+```{r echo=FALSE, include=FALSE}
+# create a data frame of the ages to be used as predictors
+age_intervals <- data.frame(age = seq(20, 80, by = 10))
+age_intervals
+```
+
+```{r echo=FALSE}
+# estimate predictions for each of the age intervals
+# predict() takes the estimated regression stored in res.lpm.age and applies the newdata generated (age intervals) to predict
+age_intervals$lpm_predics <- predict(res.lpm.age,
+                                     newdata = age_intervals,
+                                     type = "response")
+age_intervals
+```
+
+While LPM is a fairly straightforward approach to binary outcome modeling, the predictions can be outside of interpretable bounds. Here, the estimated LPM predicts a probability above unity for ages 70 and above, violating the definition of a probability measure.
+
+\ 
+
+#### Logit Model for Marriage Probability
+Relative to an LPM model, a logit model takes a nonlinear form (log-odds) and accounts for the non-negativity and unity bounds of a probability measure. Below are the results of a logit regression predicting marriage conditional on age.
+
+```{r echo=FALSE, include=FALSE}
+res.logit.age <- glm(married ~ age,
+                     data = cps_collegemen_subset,
+                     family = binomial(link = "logit"))
+
+summary(res.logit.age)
+```
+
+\ 
+
+**Logit 1:** `r equatiomatic::extract_eq(res.logit.age)`
+
+\ 
+
+**Results:**
+```{r echo=FALSE}
+
+age_intervals$logit_predics <- predict(res.logit.age, 
+                                     newdata = age_intervals, 
+                                     type = "response")
+age_intervals
+```
+
+With a logit model, we now have reasonable estimates of the probability a male with at least a college degree is married by age interval.
+
+\ 
+
+#### LPM vs. Logit
+Graphically, the linear probability model aims to fit a line through the data, despite making predictions out of bounds. Logit, however, takes on a nonlinear functional form for $h(x, \beta)$.
+
+```{r message=FALSE, echo=FALSE}
+ggplot(data = age_intervals, aes(x = age)) +
+  
+  # LPM predictions
+  geom_line(aes(y = lpm_predics, color = "LPM")) +
+  geom_point(aes(y = lpm_predics, color ="LPM")) +
+  
+  # Logit Predictions
+  geom_line(aes(y = logit_predics, color = "Logit")) +
+  geom_point(aes(y = logit_predics, color ="Logit")) +
+  
+  # boundaries for probability
+  geom_hline(yintercept = 1, linetype = "dashed", col = "grey") + 
+  geom_hline(yintercept = 0, linetype = "dashed", col = "grey") +
+  
+  # color assignment
+  scale_color_manual(name = "Model Type", 
+                     values = c("LPM" = "chartreuse3", "Logit" = "dodgerblue1")) +
+  
+  labs(title = "Marriage Predictions: Logit vs. Linear Probability",
+       x = "Age",
+       y = "Predictions") +
+  theme_minimal()
+```
+
+\ 
+
+#### Switching Outcome Variable of Interest
+If we were to switch the outcome variable of interest from the conditional probability of being married to that of not being married, we just switch signs.
+
+```{r message=FALSE, echo=FALSE, include=FALSE}
+# create a new outcome variable that switches the assignment y_i = {1,0}
+cps_collegemen_subset$notmarried <- ifelse(cps_collegemen_subset$marital > 3, 1, 0) # before it was <= 3, 1, 0
+
+n_obs <- nrow(cps_collegemen_subset)
+summary(cps_collegemen_subset)
+```
+
+\ 
+
+**Logit 1:** `r equatiomatic::extract_eq(res.logit.age, use_coefs=TRUE)`
+
+\ 
+
+```{r echo=FALSE, include=FALSE}
+res.logit.age.notmarried <- glm(notmarried ~ age,
+                     data = cps_collegemen_subset,
+                     family = binomial(link = "logit"))
+
+summary(res.logit.age.notmarried)
+```
+
+\ 
+
+**Logit 2:** `r equatiomatic::extract_eq(res.logit.age.notmarried, use_coefs=TRUE)`
+
+\ 
+
+**Why does this hold?**  
+
+Since $P(not\ married) = 1 - P(married)$, it follows that:
+$$\frac{P(not\ married)}{1 - P(not\ married)} = \frac{1 - P(married)}{P(married)}$$
+\ 
+
+We can raise the fraction of probabilities to -1 and then pull it out of the natural log:
+$$\ln\left[ \frac{1 - P(married)}{P(married)} \right] = -\ln\left[ \frac{P(married)}{1 - P(married)} \right]$$
+\ 
+
+Substituting we get:
+$$\ln\left[ \frac{P(not\ married)}{1 - P(not\ married)} \right] = -[-1.19 + 0.06(Age)]$$
+$$ = 1.19 - 0.06(Age)$$
+\ 
+
+### Logit "Losing It": testing the extent of a logit model on finite data
+
+```{r message=FALSE, echo=FALSE, include=FALSE}
+DS1 <- cps |>
+  filter(
+   hisp == 1,
+   age >= 30 & age <= 39,
+   marital == 7,
+   hours > 40
+  )
+
+DS1
+```
+
+\ 
+
+#### Predicting Educational Attainment
+Here, a logit GLM is estimated to predict the educational attainment of an individual who is Hispanic, aged 30 to 39, has never married, and works overtime per week (>40 hours). The prediction is the probability of education level for this subsample being high-school diploma or higher, conditional on the logged wage of the subsample. For simplicity, I will assume the loss ratio is equal to 0.5. The size of this subsample is `r nrow(DS1)`.
+
+```{r message=FALSE, echo=FALSE, include=FALSE}
+# create binary variable for educational attainment (HS diploma or above = 1, otherwise = 0)
+DS1$HSgrad <- ifelse(DS1$education >= 12, 1, 0)
+
+summary(DS1)
+```
+
+
+```{r message=FALSE, echo=FALSE, include=FALSE}
+# conditional probability (Y = HSgrad or above | X = ln(wage)) for this subsample of individuals
+# using a logit GLM to predict educational attainment; first we estimate the logit model
+res.logit.educ <- glm(HSgrad ~ lwage,
+                      data = DS1,
+                      family = binomial(link = "logit"))
+
+summary(res.logit.educ)
+```
+
+\ 
+
+**Logit 2:** `r equatiomatic::extract_eq(res.logit.educ)`
+
+\ 
+
+```{r message=FALSE, echo=FALSE}
+# use the estimated model and each individual's observed logged wage to predict if educ >= HS diploma
+DS1$logit_predics_HS <- predict(res.logit.educ, type = "response")
+
+# encode prediction as 0 or 1 with threshold 50%
+DS1$predic_HSgrad <- ifelse(DS1$logit_predics_HS > 0.50, 1, 0)
+
+# encode correct predictions
+DS1$predic_correct <- (DS1$predic_HSgrad == DS1$HSgrad)
+
+count_correct <- sum(DS1$predic_correct)
+total_obs <- nrow(DS1)
+
+DS1 |>
+  group_by(HSgrad, predic_HSgrad, predic_correct) |>
+  summarise(n = n())
+```
+
+Of the `r total_obs` observations in this subsample, the estimated logit model **correctly predicted educational attainment `r count_correct` times** (`r scales::percent(count_correct/total_obs, accuracy = 0.1)`), that is the model correctly predicted both having at least a high school diploma and not having a high school diploma. The model incorrectly predicted educational attainment outcomes **`r total_obs - count_correct` times** (`r scales::percent((total_obs - count_correct)/total_obs, accuracy = 0.1)`).
+
+\ 
+
+#### Smaller Subset
+```{r echo=FALSE, include=FALSE}
+DS2 <- DS1 |>
+  filter(
+    age == 32 | age == 33
+  )
+
+summary(DS2)
+```
+
+The size of subsample DS2, which contains individuals aged 32 or 33, is `r nrow(DS2)` observations.
+
+```{r echo=FALSE, include=FALSE}
+# conditional probability (Y = HSgrad or above | X = ln(wage)) for this subsample of individuals
+# using a logit GLM to predict educational attainment; first we estimate the logit model
+res.logit.educ.DS2 <- glm(HSgrad ~ lwage,
+                      data = DS2,
+                      family = binomial(link = "logit"))
+
+summary(res.logit.educ.DS2)
+```
+
+Extreme coefficients and standard errors result when running a logit model on this smaller subset of the sample, and warnings for non-convergence and fitted probabilities to 0 or 1 also appear.
+
+```{r message=FALSE, echo=FALSE}
+# use the estimated model and each individual's observed logged wage to predict if educ >= HS diploma
+DS2$logit_predics_HS <- predict(res.logit.educ.DS2, type = "response")
+
+# encode prediction as 0 or 1 with threshold 50%
+DS2$predic_HSgrad <- ifelse(DS2$logit_predics_HS > 0.50, 1, 0)
+
+# encode correct predictions
+DS2$predic_correct <- (DS2$predic_HSgrad == DS2$HSgrad)
+
+count_correct_DS2 <- sum(DS2$predic_correct)
+total_obs_DS2 <- nrow(DS2)
+
+DS2 |>
+  group_by(HSgrad, predic_HSgrad, predic_correct) |>
+  summarise(n = n())
+```
+
+\ 
+
+#### Sorting on Wages
+```{r echo=FALSE, include=FALSE}
+DS2 |>
+  sort_by(DS2$lwage)
+```
+
+After sorting the data for 32 and 33-year-olds based on logged wages, an easier rule for predicting whether someone attained a high school diploma is anyone making above $10/hour (or above a log wage of about `r round(log(10), 3)`).
+
+The results here are likely due to maximum likelihood trying to maximize the probability of seeing this distribution but with very little data and with little variation. Instead of an S-curved fit, it breaks into pushing some data to 0 and the rest to 1.
+
+\ 
+
+
+
+
+
+
+
