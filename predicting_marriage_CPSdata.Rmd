@@ -1,5 +1,5 @@
 ---
-title: "Homework 3"
+title: "Predicting Marriage with CPS Data"
 author: "Cameron Taheri"
 date: "2026-01-30"
 output: pdf_document
